@@ -57,14 +57,14 @@ stoneAttrs x y maybeStoneColor =
 
 -- Stone that toggles when clicked.  Color is determined by behavior parameter
 toggleStone :: MonadWidget t m => Int -> Int -> Behavior t StoneColor -> m()
-toggleStone x y behaviorMaybeColor = do
-  currentColor <- sample behaviorMaybeColor
-  let mcolor False = Nothing
-      mcolor True  = Just currentColor
+toggleStone x y behaviorColor = do
+  let toggleWithColor c Nothing  = Just c
+      toggleWithColor _ (Just _) = Nothing
   rec
-    visible <- toggle False clickEv
-    clickEv <- dynStone x y (mcolor <$> visible) -- returns nested Event, how to resolve?
+    dynMaybeColor <- foldDyn toggleWithColor Nothing (behaviorColor <@ clickEv)
+    clickEv <- dynStone x y dynMaybeColor
   blank
+
 
 -- Always-on stone with selection border 
 paletteStone :: MonadWidget t m => Int -> Int -> StoneColor -> Dynamic t Bool-> m(Event t())
@@ -94,15 +94,15 @@ paletteWidget =
       -- Combine Event t () from both palette stones into single Event t StoneColor
       -- Keep the first event if more than one happen simultaneously
       let pickColor = mergeWith const [
-              const Black <$> pickBlack,
-              const White <$> pickWhite ]
+              Black <$ pickBlack,
+              White <$ pickWhite ]
 
         -- And store current color as a Dynamic
       selectedColor <- holdDyn Black pickColor
 
       -- The palette stones with selection box logic
-      pickBlack <- paletteStone (-1) 0 Black $ fmap (==Black) selectedColor
-      pickWhite <- paletteStone (-1) 1 White $ fmap (==White) selectedColor
+      pickBlack <- paletteStone (-2) 0 Black $ fmap (==Black) selectedColor
+      pickWhite <- paletteStone (-2) 1 White $ fmap (==White) selectedColor
     return $ current selectedColor
 
 
@@ -146,14 +146,20 @@ bodyElement = do
     dim = (fromIntegral.boardDimension) boardSize
 
     -- View for whole board plus palette along left edge
-    viewbox = pack $ "-1.5 -0.5 " ++ (show $ dim + 1.0) ++ " " ++ (show dim)
+    viewbox = pack $ "-2.5 -0.5 " ++ (show $ dim + 2.0) ++ " " ++ (show dim)
 
   svgAttr "svg" (Map.fromList [
     ("viewBox", viewbox)
     ]) $ do
 
     currentColor <- paletteWidget
-    -- svgAttr "line" (Map.FromList)
+    -- svgAttr "line" (Map.fromList [
+    --     ("x1", "-0.5"),
+    --     ("y1", "-0.5"),
+    --     ("x2", "-0.5"),
+    --     ("y2", (pack.show) (dim + 0.5)),
+    --     ("style", "stroke:black;stroke-width:0.04;stroke-linecap:square")])
+    --   blank
     boardWidget boardSize currentColor
 
   blank
